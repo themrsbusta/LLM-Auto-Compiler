@@ -294,7 +294,7 @@ def run(config, objective, run_dir):
 
 
 def main():
-    app_dir = Path(sys.executable).resolve().parent if getattr(sys, 'frozen', False) else Path(__file__).resolve().parent
+    app_dir = Path(sys.executable).resolve().parent if getattr(sys, 'frozen', False) else Path(__file__).resolve().parents[1]
     parser=argparse.ArgumentParser(description='LLMAuc — Núcleo Cognitivo Efêmero')
     parser.add_argument('--config',default=str(app_dir/'config.json'))
     parser.add_argument('--objective')

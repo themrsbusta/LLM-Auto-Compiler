@@ -8,3 +8,8 @@ dist/
 *.zip
 VALIDATION*.json
 TESTS.txt
+*.gguf
+*.log
+.venv/
+.env
+.env.*

@@ -4,11 +4,11 @@
 
 ## Executar
 
-Copie `config.example.json` para `config.json` e indique llama-server e GGUF reais. O teste de referência usou Gemma E4B Q4_K_M, Vulkan0, 20 camadas e contexto 4096.
+Copie `configs/config.example.json` para `config.json` na raiz e indique llama-server e GGUF reais. O teste de referência usou Gemma E4B Q4_K_M, Vulkan0, 20 camadas e contexto 4096.
 
 ```powershell
-python autocompiler.py --config config.json --objective 'Crie hello.txt com Hello World e finalize após conferir o resultado anterior.' --run-dir runs/minha-tarefa
-python -m unittest -v
+python src/autocompiler.py --config config.json --objective 'Crie hello.txt com Hello World e finalize após conferir o resultado anterior.' --run-dir runs/minha-tarefa
+python -m unittest discover -s tests -v
 ```
 
 Use uma pasta de execução nova a cada chamada. O caminho de executável/modelo relativo é resolvido pela pasta da configuração. A Base não altera modelos nem a instalação do HAME.
@@ -59,8 +59,17 @@ O pacote Windows contém o executável de console e sua configuração externa. 
 
 Sem `--run-dir`, as execuções são criadas em `runs` ao lado do executável. A configuração padrão é `config.json` ao lado dele, independentemente do diretório atual. Os scripts Python são executados em um subprocesso do próprio LLMAuc, com runtime Python embutido; não é necessário instalar Python separadamente. llama.cpp completo e modelos GGUF continuam externos e precisam existir nos caminhos da configuração. O modo `trusted_python` só dispõe dos módulos incluídos no pacote, não de qualquer pacote Python instalado no sistema.
 
-Reconstruir com Python e PyInstaller instalados: `powershell -File build-exe.ps1`.
+Instale as dependências de build com `python -m pip install -r packaging/requirements-build.txt` e reconstrua com `powershell -File scripts/windows/build-exe.ps1`. O executável e os exemplos ficam em `build/windows-x64/`; o ZIP público fica em `build/packages/`. O script não inclui configurações pessoais ou históricos e preserva um `config.json` existente.
 
 ## Organização da entrega 0.1
 
-No repositório público, os fontes ficam na raiz. O script de empacotamento produz o diretório `build/` e o ZIP ao lado do checkout. Configurações pessoais, históricos e intermediários não são publicados.
+- `src/`: implementação Python. Os caminhos padrão de configuração e execuções continuam relativos à raiz do checkout; no executável, continuam relativos à pasta de `LLMAuc.exe`.
+- `tests/`: testes automatizados, executados com o comando acima.
+- `configs/`: exemplo público de configuração.
+- `scripts/windows/`: iniciador e script de empacotamento. Para iniciar pelo PowerShell: `./scripts/windows/Start-AutoCompiler.ps1 -Objective 'Seu objetivo'`.
+- `packaging/`: especificação PyInstaller e dependências de build.
+- `docs/`: notas da versão e validação da reorganização.
+- `references/hame/`: referências e manifesto original preservados.
+- `build/` e `runs/`: saídas locais ignoradas pelo Git.
+
+A organização mantém a versão **0.1** e o ciclo existente. Configurações pessoais, históricos, modelos e intermediários não são publicados.

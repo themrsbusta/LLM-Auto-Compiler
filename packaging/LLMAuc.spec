@@ -1,8 +1,12 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 
+from pathlib import Path
+
+root = Path(SPECPATH).resolve().parent
+
 a = Analysis(
-    ['autocompiler.py'],
+    [str(root / 'src' / 'autocompiler.py')],
     pathex=[],
     binaries=[],
     datas=[],
