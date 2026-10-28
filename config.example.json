@@ -1,0 +1,13 @@
+{
+  "llama_server": "CAMINHO/llama-server.exe",
+  "model": "CAMINHO/model.gguf",
+  "device": "Vulkan0",
+  "gpu_layers": 20,
+  "context_tokens": 4096,
+  "output_tokens": 1024,
+  "startup_timeout": 180,
+  "inference_timeout": 180,
+  "script_timeout": 15,
+  "max_attempts": 3,
+  "policy": "write_text"
+}

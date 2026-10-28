@@ -1,0 +1,11 @@
+{
+  "source": "https://github.com/themrsbusta/HAME",
+  "branch": "main",
+  "sha256": {
+    "adapter.go": "eb082c7fdaafc289291ffe40fb8b192acc97ccef4d9696e51785182dbe6ed5e1",
+    "process_windows.go": "4fe0847a63bdc92e09dd9cfe7acc5720e4122b203e0bbf84cb4db20befc647bc",
+    "main.go": "78b80df7ce6d442d5fa67e51db0e2b2af0ef1b23fb4c5b389f1dc2cb059af119",
+    "cycle.go": "bdc2fdd9b1b590931d217f3f73ed2296b2c9ad9d432e05f1fde54bc353c70f8b",
+    "LICENSE": "029b3feab53efb54bb7d0e003b0467095146d2a5bdc180aeaefbbcbbfc73533a"
+  }
+}

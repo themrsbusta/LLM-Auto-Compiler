@@ -1,0 +1,10 @@
+config.json
+runs/
+__pycache__/
+.packaging-build/
+build/
+dist/
+*.exe
+*.zip
+VALIDATION*.json
+TESTS.txt
