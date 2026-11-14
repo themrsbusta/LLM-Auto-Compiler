@@ -1,4 +1,4 @@
-"""LLM Auto-Compiler: Base persistente, worker llama.cpp efemero."""
+"""LLM Auto-Compiler: persistent base and ephemeral llama.cpp worker."""
 import argparse
 import ast
 import ctypes
@@ -29,7 +29,7 @@ def stamp():
     return datetime.now(timezone.utc).isoformat()
 
 
-# Inspirado no isolamento dos workers do HAME; implementacao Python independente.
+# Inspired by HAME worker isolation; independent Python implementation.
 class IO_COUNTERS(ctypes.Structure):
     _fields_ = [(n, ctypes.c_ulonglong) for n in ('ReadOperationCount','WriteOperationCount','OtherOperationCount','ReadTransferCount','WriteTransferCount','OtherTransferCount')]
 
@@ -74,7 +74,7 @@ class Owned:
                 nt.NtResumeProcess.argtypes = [wintypes.HANDLE]
                 nt.NtResumeProcess.restype = ctypes.c_long
                 if nt.NtResumeProcess(int(self.proc._handle)) != 0:
-                    raise RuntimeError('Falha ao liberar worker suspenso')
+                    raise RuntimeError('Failed to resume suspended worker')
         except BaseException:
             self.close()
             raise
@@ -97,7 +97,7 @@ class Owned:
 def request(url, payload=None, timeout=5):
     data = None if payload is None else json.dumps(payload).encode()
     req = urllib.request.Request(url, data=data, headers={'Content-Type':'application/json'})
-    # Servidor local: nao encaminhar via proxy configurado no ambiente.
+    # Local server: do not route through the environment-configured proxy.
     with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req, timeout=timeout) as response:
         return json.load(response)
 
@@ -140,22 +140,22 @@ def infer(config, context, attempt):
             deadline = time.monotonic() + config['startup_timeout']
             while True:
                 if worker.proc.poll() is not None:
-                    raise RuntimeError('llama-server terminou durante inicializacao; consulte worker.stderr.log')
+                    raise RuntimeError('llama-server exited during startup; see worker.stderr.log')
                 try:
                     request(url+'/health', timeout=2)
                     break
                 except (OSError, ValueError):
                     if time.monotonic() > deadline:
-                        raise TimeoutError('Tempo de inicializacao excedido')
+                        raise TimeoutError('Startup timed out')
                     time.sleep(.3)
             save(attempt/'tools.json', request(url+'/tools'))
             raw = request(url+'/v1/chat/completions', payload, config['inference_timeout'])
             save(attempt/'response.json', raw)
             msg = raw['choices'][0]['message']
             if msg.get('tool_calls'):
-                raise ValueError('Chamada de ferramenta fora do contrato de scripts; nao executada')
+                raise ValueError('Tool call is outside the script contract; it was not executed')
             if raw['choices'][0]['finish_reason'] != 'stop':
-                raise ValueError('Resposta interrompida ou truncada')
+                raise ValueError('Response was interrupted or truncated')
             artifact = json.loads(msg['content'])
             validate_contract(artifact)
             return artifact
@@ -167,25 +167,25 @@ def infer(config, context, attempt):
 
 def validate_contract(value):
     if type(value) is not dict or set(value) != set(SCHEMA['required']):
-        raise ValueError('Campos do contrato invalidos')
+        raise ValueError('Invalid contract fields')
     if any(type(v) is not str for v in value.values()) or value['action'] not in ('execute','finish'):
-        raise ValueError('Tipos do contrato invalidos')
+        raise ValueError('Invalid contract types')
     if value['action'] == 'execute' and not value['script'].strip():
-        raise ValueError('Script vazio')
+        raise ValueError('Empty script')
 
 
 def target_path(workspace, name):
     path = Path(name)
     if not name or path.is_absolute() or '..' in path.parts or ':' in name or '\\' in name:
-        raise ValueError('Caminho de saida invalido')
+        raise ValueError('Invalid output path')
     result = (workspace/path).resolve()
     if not result.is_relative_to(workspace.resolve()) or result == workspace.resolve():
-        raise ValueError('Saida fora do workspace')
-    # Nao aceitar links/junctions existentes na cadeia de destino.
+        raise ValueError('Output is outside the workspace')
+    # Reject existing links/junctions in the destination path.
     current = workspace/path
     while current != workspace:
         if current.is_symlink() or (hasattr(current,'is_junction') and current.is_junction()):
-            raise ValueError('Link no caminho de saida')
+            raise ValueError('Link in output path')
         current = current.parent
     return result
 
@@ -193,34 +193,34 @@ def target_path(workspace, name):
 def validate_script(source, workspace, policy):
     tree = ast.parse(source)
     if policy == 'trusted_python':
-        return []  # codigo arbitrario explicitamente configurado; nao e sandbox
+        return []  # Arbitrary code is explicitly configured; this is not a sandbox.
     outputs = []
     for index, node in enumerate(tree.body):
         if index == 0 and isinstance(node, ast.ImportFrom) and node.module == 'pathlib' and node.level == 0:
             if len(node.names) == 1 and node.names[0].name == 'Path' and node.names[0].asname is None:
                 continue
         if not isinstance(node, ast.Expr) or not isinstance(node.value, ast.Call):
-            raise ValueError('Politica write_text: instrucao nao permitida')
+            raise ValueError('write_text policy: statement is not allowed')
         call = node.value
         if not (isinstance(call.func,ast.Attribute) and call.func.attr == 'write_text' and isinstance(call.func.value,ast.Call)):
-            raise ValueError('Somente Path(...).write_text(...) permitido')
+            raise ValueError('Only Path(...).write_text(...) is allowed')
         base = call.func.value
         if not (isinstance(base.func,ast.Name) and base.func.id == 'Path' and len(base.args)==1 and not base.keywords and isinstance(base.args[0],ast.Constant) and type(base.args[0].value) is str):
-            raise ValueError('Path exige caminho literal')
+            raise ValueError('Path requires a literal path')
         if len(call.args)!=1 or not isinstance(call.args[0],ast.Constant) or type(call.args[0].value) is not str:
-            raise ValueError('Conteudo deve ser texto literal')
+            raise ValueError('Content must be a string literal')
         if len(call.keywords)!=1 or call.keywords[0].arg!='encoding' or not isinstance(call.keywords[0].value,ast.Constant) or call.keywords[0].value.value!='utf-8':
-            raise ValueError('encoding utf-8 obrigatorio')
+            raise ValueError('encoding utf-8 is required')
         dest = target_path(workspace,base.args[0].value)
         if dest.exists():
-            raise ValueError('Politica write_text nao sobrescreve arquivos existentes')
+            raise ValueError('write_text policy does not overwrite existing files')
         if len(call.args[0].value.encode()) > 1024*1024:
-            raise ValueError('Arquivo excede limite')
+            raise ValueError('File exceeds the size limit')
         outputs.append((dest,call.args[0].value))
     if not outputs:
-        raise ValueError('Nenhuma escrita validada')
+        raise ValueError('No validated file writes')
     if len({str(p).casefold() for p,_ in outputs}) != len(outputs):
-        raise ValueError('Saida duplicada')
+        raise ValueError('Duplicate output')
     return outputs
 
 
@@ -270,12 +270,12 @@ def run(config, objective, run_dir):
             save(attempt/'artifact.json',artifact)
             if artifact['action']=='finish':
                 if not state['history'] or not state['history'][-1]['result']['success']:
-                    raise ValueError('Modelo tentou finalizar sem execucao anterior bem-sucedida')
+                    raise ValueError('Model tried to finish without a previous successful execution')
                 state.update(status='completed',stage='finished',summary=artifact['summary'])
                 break
             fingerprint = hashlib.sha256(artifact['script'].encode()).hexdigest()
             if fingerprint in seen:
-                raise ValueError('Script repetido; ciclo interrompido')
+                raise ValueError('Repeated script; cycle stopped')
             seen.add(fingerprint)
             state['stage']='execution_pending'
             save(run_dir/'checkpoint.json',state)
@@ -295,15 +295,15 @@ def run(config, objective, run_dir):
 
 def main():
     app_dir = Path(sys.executable).resolve().parent if getattr(sys, 'frozen', False) else Path(__file__).resolve().parents[1]
-    parser=argparse.ArgumentParser(description='LLMAuc — Núcleo Cognitivo Efêmero')
+    parser=argparse.ArgumentParser(description='LLMAuc — Ephemeral Cognitive Core')
     parser.add_argument('--config',default=str(app_dir/'config.json'))
     parser.add_argument('--objective')
     parser.add_argument('--run-dir')
     args=parser.parse_args()
     if not args.objective:
-        args.objective=input('Objetivo da tarefa: ').strip()
+        args.objective=input('Task objective: ').strip()
         if not args.objective:
-            parser.error('Informe um objetivo')
+            parser.error('Enter an objective')
     if not args.run_dir:
         args.run_dir=str(app_dir/'runs'/datetime.now().strftime('%Y%m%d-%H%M%S-%f'))
     cfg_path=Path(args.config).resolve()
@@ -311,12 +311,12 @@ def main():
     for key in ('llama_server','model'):
         config[key]=str((cfg_path.parent/config[key]).resolve())
         if not Path(config[key]).is_file():
-            parser.error(f'Arquivo ausente: {key}')
+            parser.error(f'Missing file: {key}')
     if config['policy'] not in ('write_text','trusted_python'):
-        parser.error('Politica invalida')
+        parser.error('Invalid policy')
     for key in ('max_attempts','startup_timeout','inference_timeout','script_timeout','context_tokens','output_tokens'):
         if type(config[key]) is not int or config[key]<=0:
-            parser.error(f'Limite invalido: {key}')
+            parser.error(f'Invalid limit: {key}')
     state=run(config,args.objective,Path(args.run_dir).resolve())
     print(json.dumps({'status':state['status'],'error':state.get('error'),'run_dir':str(Path(args.run_dir).resolve())},ensure_ascii=False))
     return 0 if state['status']=='completed' else 1
@@ -332,8 +332,8 @@ if __name__=='__main__':
         try:
             code=main()
         except Exception as exc:
-            print('Erro:',exc,file=sys.stderr)
+            print('Error:',exc,file=sys.stderr)
             code=1
         if interactive:
-            input('Pressione Enter para fechar...')
+            input('Press Enter to close...')
         sys.exit(code)

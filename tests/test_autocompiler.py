@@ -45,6 +45,6 @@ class CompilerTests(unittest.TestCase):
             with patch.object(ac,'infer',return_value=artifact), patch.object(ac,'execute',return_value={'success':False}):
                 state=ac.run({'max_attempts':3,'policy':'write_text'},'test',Path(tmp)/'run')
             self.assertEqual(state['status'],'failed')
-            self.assertIn('repetido',state['error'])
+            self.assertIn('Repeated script',state['error'])
 
 if __name__=='__main__': unittest.main()

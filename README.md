@@ -1,75 +1,75 @@
 # LLM Auto-Compiler (LLMAuc) — 0.1
 
-**LLMAuc** é a sigla de **LLM Auto Compiler**. Base permanente com Núcleo Cognitivo efêmero, inspirado no HAME. Python 3.10+ e biblioteca padrão; validado no Windows x64 com Python 3.14.
+**LLMAuc** stands for **LLM Auto Compiler**. A persistent base with an ephemeral Cognitive Core, inspired by HAME. Requires Python 3.10+ and the standard library; validated on Windows x64 with Python 3.14.
 
-## Executar
+## Run
 
-Copie `configs/config.example.json` para `config.json` na raiz e indique llama-server e GGUF reais. O teste de referência usou Gemma E4B Q4_K_M, Vulkan0, 20 camadas e contexto 4096.
+Copy `configs/config.example.json` to `config.json` in the repository root and set real llama-server and GGUF paths. The reference test used Gemma E4B Q4_K_M, Vulkan0, 20 layers, and a 4096-token context.
 
 ```powershell
-python src/autocompiler.py --config config.json --objective 'Crie hello.txt com Hello World e finalize após conferir o resultado anterior.' --run-dir runs/minha-tarefa
+python src/autocompiler.py --config config.json --objective 'Create hello.txt with Hello World and finish after checking the previous result.' --run-dir runs/my-task
 python -m unittest discover -s tests -v
 ```
 
-Use uma pasta de execução nova a cada chamada. O caminho de executável/modelo relativo é resolvido pela pasta da configuração. A Base não altera modelos nem a instalação do HAME.
+Use a new run directory for each invocation. Relative executable/model paths are resolved from the configuration directory. The Base does not modify models or the HAME installation.
 
-## Ciclo implementado
+## Implemented cycle
 
-1. Persistir objetivo e checkpoint.
-2. Iniciar llama-server em loopback, porta temporária, com `--tools all --parallel 1 --reasoning off --jinja`.
-3. Aguardar saúde, registrar ferramentas reais de `/tools` e solicitar contrato JSON: análise, revisão, ação, script e resumo.
-4. Capturar resposta e encerrar todo o Job Object do worker antes de executar o script.
-5. Validar contrato e política, persistir script e hash, executar Python com timeout, registrar stdout, stderr e resultado.
-6. Verificar arquivos e conteúdo na política padrão; fornecer script anterior, resultado e histórico a um processo novo.
-7. Aceitar finalização somente depois de execução bem-sucedida. Interromper scripts repetidos e aplicar máximo de tentativas.
+1. Persist the objective and checkpoint.
+2. Start llama-server on loopback with a temporary port and `--tools all --parallel 1 --reasoning off --jinja`.
+3. Wait for health, record the actual tools from `/tools`, and request a JSON contract containing analysis, review, action, script, and summary.
+4. Capture the response and close the worker's entire Job Object before running the script.
+5. Validate the contract and policy, persist the script and hash, run Python with a timeout, and record stdout, stderr, and the result.
+6. Verify files and their contents under the default policy; provide the previous script, result, and history to a new process.
+7. Accept completion only after successful execution. Stop repeated scripts and enforce the attempt limit.
 
-No Windows, processos nascem suspensos e são atribuídos a um Job Object próprio antes de serem liberados; fechamento da Base encerra os filhos. Não são encerrados processos por nome. Cada inferência carrega um novo worker e nenhum cache de sessão é restaurado. O cache de arquivos do sistema operacional pode continuar em RAM.
+On Windows, processes are created suspended and assigned to their own Job Object before they are resumed; closing the Base terminates its children. Processes are not stopped by name. Each inference starts a new worker and does not restore a session cache. The operating system's file cache may remain in RAM.
 
-## Ferramentas
+## Tools
 
-`--tools all` está ativado no comando do servidor, sem opção de desativação nesta versão. A lista anunciada é salva em cada tentativa. O fluxo 0.1 usa geração de scripts: não passa definições de ferramentas ao modelo nem encaminha chamadas para `/tools`. Chamadas inesperadas são rejeitadas. Habilitar as ferramentas nativas não equivale a implementar o ciclo de execução de tool calls. O servidor fica em loopback e existe somente durante a inferência; não oferece autenticação a outros processos locais.
+`--tools all` is enabled in the server command and cannot be disabled in this version. The advertised list is saved for each attempt. Version 0.1 generates scripts: it does not send tool definitions to the model or forward calls to `/tools`. Unexpected calls are rejected. Enabling native tools is not the same as implementing a tool-call execution cycle. The server is bound to loopback and exists only during inference; it does not authenticate other local processes.
 
-## Políticas de execução
+## Execution policies
 
-`write_text` (padrão): aceita somente importação de Path e chamadas literais `Path("arquivo-relativo").write_text("conteúdo", encoding="utf-8")`. Rejeita escapes de diretório, links, sobrescrita, saídas duplicadas e expressões dinâmicas. O arquivo deve estar em diretório já existente. A Base verifica o conteúdo real após executar. É uma política estreita para validar o ciclo, não um sandbox geral nem proteção contra alterações concorrentes no filesystem.
+`write_text` (default): accepts only a `Path` import and literal calls to `Path("relative-file").write_text("content", encoding="utf-8")`. It rejects directory traversal, links, overwrites, duplicate outputs, and dynamic expressions. The file must be in an existing directory. The Base checks the actual content after execution. This narrow policy validates the cycle; it is not a general sandbox or protection against concurrent filesystem changes.
 
-`trusted_python`: executa Python arbitrário com as permissões da conta. É uma seleção explícita na configuração, sem sandbox; não foi ativada para os testes reais com a LLM. O retorno zero conta como sucesso de processo, sem provar que o objetivo foi cumprido. A revisão textual da LLM não constitui aprovação independente.
+`trusted_python`: runs arbitrary Python with the account's permissions. It is an explicit configuration choice with no sandbox; it was not enabled for real LLM tests. A zero exit code counts as process success but does not prove the objective was met. The LLM's textual review is not independent approval.
 
-## Artefatos
+## Artifacts
 
-`checkpoint.json`: estado e histórico. `workspace/`: saídas da tarefa. `attempt-NNN/`: requisição, resposta original, artefato, script, hash, comando e PID do worker, timestamps, ferramentas anunciadas e logs separados.
+`checkpoint.json`: state and history. `workspace/`: task outputs. `attempt-NNN/`: request, original response, artifact, script, hash, command and worker PID, timestamps, advertised tools, and separate logs.
 
-Checkpoints são gravados via arquivo temporário e substituição atômica. `execution_pending` indica que uma interrupção pode ter acontecido antes ou durante os efeitos do script: não repetir automaticamente. Não há retomada automática, rollback ou garantia de execução exatamente uma vez nesta versão.
+Checkpoints are written through a temporary file and atomic replacement. `execution_pending` means an interruption may have happened before or during the script's effects: do not retry automatically. This version has no automatic resume, rollback, or exactly-once execution guarantee.
 
-## Escopo e limites
+## Scope and limitations
 
-Primeiro ciclo funcional para Windows, scripts Python e backend llama-server. Ainda não há interface gráfica, scripts BAT/SH, revisão em inferência separada, compactação do histórico, seleção de arquivos para contexto ou protocolo de novas inferências solicitadas por scripts. O histórico cresce até o orçamento do backend e pode causar rejeição; não há truncamento silencioso. Logs vão para disco, sem rotação ou quota própria. Timeout de inicialização, requisição e script é configurável. Falha de contrato encerra a execução com checkpoint de erro. Linux não foi executado/testado. Sem dependência de HAME em runtime.
+This is a first working cycle for Windows, Python scripts, and the llama-server backend. There is no GUI, BAT/SH script support, separate inference for review, history compaction, context file selection, or protocol for scripts to request additional inference. History grows to the backend budget and may be rejected; it is not silently truncated. Logs are written to disk without rotation or a dedicated quota. Startup, request, and script timeouts are configurable. A contract failure stops execution and records an error checkpoint. Linux has not been run or tested. HAME is not a runtime dependency.
 
-## Origem
+## Origin
 
-Referência: https://github.com/themrsbusta/HAME (identificado no README público como 0.9 RC). Cópias consultadas e hashes em `references/hame/manifest.json`. A instalação local 0.92 RC é usada somente como referência de configuração. Fontes de referência preservam a licença BSD-3-Clause em `references/hame/LICENSE`. O adaptador Python foi escrito para este projeto; nenhum arquivo instalado do HAME foi modificado.
+Reference: https://github.com/themrsbusta/HAME (identified in the public README as 0.9 RC). Consulted copies and hashes are in `references/hame/manifest.json`. The local 0.92 RC installation is used only as a configuration reference. Reference sources retain the BSD-3-Clause license in `references/hame/LICENSE`. The Python adapter was written for this project; no installed HAME file was modified.
 
-## Executável Windows LLMAuc.exe
+## Windows executable: LLMAuc.exe
 
-O pacote Windows contém o executável de console e sua configuração externa. Abra `LLMAuc.exe` e digite o objetivo, ou use:
+The Windows package contains the console executable and its external configuration. Open `LLMAuc.exe` and enter an objective, or run:
 
 ```powershell
-.\LLMAuc.exe --objective 'Crie hello.txt com Hello World e finalize após conferir o resultado anterior.'
+.\LLMAuc.exe --objective 'Create hello.txt with Hello World and finish after checking the previous result.'
 ```
 
-Sem `--run-dir`, as execuções são criadas em `runs` ao lado do executável. A configuração padrão é `config.json` ao lado dele, independentemente do diretório atual. Os scripts Python são executados em um subprocesso do próprio LLMAuc, com runtime Python embutido; não é necessário instalar Python separadamente. llama.cpp completo e modelos GGUF continuam externos e precisam existir nos caminhos da configuração. O modo `trusted_python` só dispõe dos módulos incluídos no pacote, não de qualquer pacote Python instalado no sistema.
+Without `--run-dir`, runs are created in `runs` beside the executable. The default configuration is `config.json` beside it, regardless of the current directory. Python scripts run in a subprocess of LLMAuc itself with an embedded Python runtime, so Python does not need to be installed separately. Full llama.cpp and GGUF models remain external and must be available at the configured paths. `trusted_python` has access only to modules included in the package, not every Python package installed on the system.
 
-Instale as dependências de build com `python -m pip install -r packaging/requirements-build.txt` e reconstrua com `powershell -File scripts/windows/build-exe.ps1`. O executável e os exemplos ficam em `build/windows-x64/`; o ZIP público fica em `build/packages/`. O script não inclui configurações pessoais ou históricos e preserva um `config.json` existente.
+Install build dependencies with `python -m pip install -r packaging/requirements-build.txt` and rebuild with `powershell -File scripts/windows/build-exe.ps1`. The executable and examples go in `build/windows-x64/`; the public ZIP goes in `build/packages/`. The script excludes personal configuration and history and preserves an existing `config.json`.
 
-## Organização da entrega 0.1
+## 0.1 delivery layout
 
-- `src/`: implementação Python. Os caminhos padrão de configuração e execuções continuam relativos à raiz do checkout; no executável, continuam relativos à pasta de `LLMAuc.exe`.
-- `tests/`: testes automatizados, executados com o comando acima.
-- `configs/`: exemplo público de configuração.
-- `scripts/windows/`: iniciador e script de empacotamento. Para iniciar pelo PowerShell: `./scripts/windows/Start-AutoCompiler.ps1 -Objective 'Seu objetivo'`.
-- `packaging/`: especificação PyInstaller e dependências de build.
-- `docs/`: notas da versão e validação da reorganização.
-- `references/hame/`: referências e manifesto original preservados.
-- `build/` e `runs/`: saídas locais ignoradas pelo Git.
+- `src/`: Python implementation. Default configuration and run paths remain relative to the checkout root; in the executable, they remain relative to the `LLMAuc.exe` directory.
+- `tests/`: automated tests, run with the command above.
+- `configs/`: public configuration example.
+- `scripts/windows/`: launcher and packaging script. Start from PowerShell with `./scripts/windows/Start-AutoCompiler.ps1 -Objective 'Your objective'`.
+- `packaging/`: PyInstaller specification and build dependencies.
+- `docs/`: release notes and validation of the reorganization.
+- `references/hame/`: preserved references and original manifest.
+- `build/` and `runs/`: local outputs ignored by Git.
 
-A organização mantém a versão **0.1** e o ciclo existente. Configurações pessoais, históricos, modelos e intermediários não são publicados.
+The reorganization retains version **0.1** and the existing cycle. Personal configuration, history, models, and intermediate files are not published.
