@@ -1,5 +1,8 @@
 # LLM Auto-Compiler (LLMAuc) — 0.1
 
+**Division:** Panthera Research — Panthera Research. **License:** [MIT](LICENSE).
+
+
 **LLMAuc** stands for **LLM Auto Compiler**. A persistent base with an ephemeral Cognitive Core, inspired by HAME. Requires Python 3.10+ and the standard library; validated on Windows x64 with Python 3.14.
 
 ## Run
@@ -47,7 +50,7 @@ This is a first working cycle for Windows, Python scripts, and the llama-server 
 
 ## Origin
 
-Reference: https://github.com/themrsbusta/HAME (identified in the public README as 0.9 RC). Consulted copies and hashes are in `references/hame/manifest.json`. The local 0.92 RC installation is used only as a configuration reference. Reference sources retain the BSD-3-Clause license in `references/hame/LICENSE`. The Python adapter was written for this project; no installed HAME file was modified.
+Reference: https://github.com/themrsbusta/HAME (identified in the public README as 0.9 RC). Consulted copies and hashes are in `references/hame/manifest.json`. The local 0.92 RC installation is used only as a configuration reference. Reference sources retain the MIT license in `references/hame/LICENSE`. The Python adapter was written for this project; no installed HAME file was modified.
 
 ## Windows executable: LLMAuc.exe
 
